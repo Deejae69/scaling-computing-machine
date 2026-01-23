@@ -2,7 +2,7 @@
 Risk management module for position sizing and risk controls
 """
 import logging
-from typing import Optional, Dict, Any
+from typing import Dict, Any, Tuple
 from datetime import datetime, timedelta
 from config import Config
 
@@ -64,7 +64,7 @@ class RiskManager:
         """Reset order error counter"""
         self.order_errors = 0
     
-    def can_trade(self, current_equity: float) -> tuple[bool, str]:
+    def can_trade(self, current_equity: float) -> Tuple[bool, str]:
         """Check if trading is allowed based on risk controls
         
         Args:

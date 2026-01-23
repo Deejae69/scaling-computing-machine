@@ -24,7 +24,10 @@ class Config:
             self.config = yaml.safe_load(f)
         
         # MT5 Credentials from environment
-        self.mt5_login = int(os.getenv('MT5_LOGIN', 0))
+        try:
+            self.mt5_login = int(os.getenv('MT5_LOGIN', '0'))
+        except ValueError:
+            self.mt5_login = 0
         self.mt5_password = os.getenv('MT5_PASSWORD', '')
         self.mt5_server = os.getenv('MT5_SERVER', '')
         
