@@ -33,3 +33,21 @@ yarn-error.log*
 next-env.d.ts
 
 .env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+venv/
+env/
+.venv/
+
+# Bot logs
+bot/*.log
+bot/.env
