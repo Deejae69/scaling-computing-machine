@@ -27,6 +27,13 @@ class RiskManager:
         self.order_errors = 0
         self.max_order_errors = 5
         
+        # Trade statistics
+        self.total_trades = 0
+        self.winning_trades = 0
+        self.losing_trades = 0
+        self.total_profit = 0.0
+        self.total_loss = 0.0
+        
     def reset_daily_stats(self, current_equity: float):
         """Reset daily statistics
         
@@ -47,13 +54,24 @@ class RiskManager:
             pnl: Profit/loss of the trade
         """
         self.daily_pnl += pnl
+        self.total_trades += 1
         
         if pnl < 0:
             self.consecutive_losses += 1
+            self.losing_trades += 1
+            self.total_loss += abs(pnl)
             self.logger.warning(f"Loss recorded: {pnl}. Consecutive losses: {self.consecutive_losses}")
         else:
             self.consecutive_losses = 0
+            self.winning_trades += 1
+            self.total_profit += pnl
             self.logger.info(f"Profit recorded: {pnl}. Consecutive losses reset.")
+        
+        # Log statistics
+        if self.total_trades > 0:
+            win_rate = (self.winning_trades / self.total_trades) * 100
+            self.logger.info(f"Stats: {self.total_trades} trades, {win_rate:.1f}% win rate, "
+                           f"Total P&L: {self.total_profit - self.total_loss:.2f}")
     
     def record_order_error(self):
         """Record an order execution error"""
@@ -176,3 +194,29 @@ class RiskManager:
             return entry_price + tp_distance
         else:
             return entry_price - tp_distance
+    
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get trading statistics
+        
+        Returns:
+            Dictionary with trading statistics
+        """
+        win_rate = (self.winning_trades / self.total_trades * 100) if self.total_trades > 0 else 0.0
+        avg_win = self.total_profit / self.winning_trades if self.winning_trades > 0 else 0.0
+        avg_loss = self.total_loss / self.losing_trades if self.losing_trades > 0 else 0.0
+        profit_factor = self.total_profit / self.total_loss if self.total_loss > 0 else float('inf')
+        
+        return {
+            'total_trades': self.total_trades,
+            'winning_trades': self.winning_trades,
+            'losing_trades': self.losing_trades,
+            'win_rate': win_rate,
+            'total_profit': self.total_profit,
+            'total_loss': self.total_loss,
+            'net_pnl': self.total_profit - self.total_loss,
+            'average_win': avg_win,
+            'average_loss': avg_loss,
+            'profit_factor': profit_factor,
+            'consecutive_losses': self.consecutive_losses,
+            'daily_pnl': self.daily_pnl
+        }

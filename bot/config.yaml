@@ -30,6 +30,8 @@ execution:
   slippage_points: 10  # Maximum acceptable slippage
   order_type: "MARKET"  # MARKET or LIMIT
   magic_number: 12345  # Unique identifier for bot orders
+  connection_retries: 3  # Number of connection retry attempts
+  heartbeat_interval: 10  # Log heartbeat every N iterations
   
 # Data Collection
 data:

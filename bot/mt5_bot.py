@@ -56,70 +56,103 @@ class MT5Bot:
         fh = logging.FileHandler(log_file)
         fh.setLevel(log_level)
         
-        # Console handler
-        if self.config.get('logging.console', True):
-            ch = logging.StreamHandler()
-            ch.setLevel(log_level)
-            self.logger.addHandler(ch)
-        
         # Formatter
         formatter = logging.Formatter(
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
         fh.setFormatter(formatter)
         
+        # Console handler
+        if self.config.get('logging.console', True):
+            ch = logging.StreamHandler()
+            ch.setLevel(log_level)
+            ch.setFormatter(formatter)
+            self.logger.addHandler(ch)
+        
         self.logger.addHandler(fh)
     
-    def connect_mt5(self) -> bool:
-        """Connect and login to MetaTrader 5
+    def connect_mt5(self, max_retries: int = 3) -> bool:
+        """Connect and login to MetaTrader 5 with retry logic
         
+        Args:
+            max_retries: Maximum number of connection attempts
+            
         Returns:
             True if connection successful, False otherwise
         """
-        # Initialize MT5
-        if not mt5.initialize():
-            self.logger.error(f"MT5 initialize() failed, error: {mt5.last_error()}")
-            return False
-        
-        self.logger.info("MT5 initialized successfully")
-        
-        # Login if credentials provided
-        if self.config.mt5_login and self.config.mt5_password and self.config.mt5_server:
-            if not mt5.login(
-                login=self.config.mt5_login,
-                password=self.config.mt5_password,
-                server=self.config.mt5_server
-            ):
-                self.logger.error(f"MT5 login failed, error: {mt5.last_error()}")
-                mt5.shutdown()
+        for attempt in range(1, max_retries + 1):
+            try:
+                # Initialize MT5
+                if not mt5.initialize():
+                    self.logger.warning(f"MT5 initialize() failed (attempt {attempt}/{max_retries}), "
+                                       f"error: {mt5.last_error()}")
+                    if attempt < max_retries:
+                        time.sleep(2 * attempt)  # Exponential backoff
+                        continue
+                    return False
+                
+                self.logger.info("MT5 initialized successfully")
+                
+                # Login if credentials provided
+                if self.config.mt5_login and self.config.mt5_password and self.config.mt5_server:
+                    if not mt5.login(
+                        login=self.config.mt5_login,
+                        password=self.config.mt5_password,
+                        server=self.config.mt5_server
+                    ):
+                        self.logger.warning(f"MT5 login failed (attempt {attempt}/{max_retries}), "
+                                          f"error: {mt5.last_error()}")
+                        mt5.shutdown()
+                        if attempt < max_retries:
+                            time.sleep(2 * attempt)
+                            continue
+                        return False
+                    
+                    self.logger.info(f"Logged in to MT5 account: {self.config.mt5_login}")
+                
+                # Get account info
+                account_info = mt5.account_info()
+                if account_info is None:
+                    self.logger.warning(f"Failed to get account info (attempt {attempt}/{max_retries})")
+                    if attempt < max_retries:
+                        time.sleep(2 * attempt)
+                        continue
+                    return False
+                
+                self.logger.info(f"Account info: Balance={account_info.balance}, "
+                                f"Equity={account_info.equity}, Server={account_info.server}")
+                
+                # Get symbol info
+                self.symbol_info = mt5.symbol_info(self.config.symbol)
+                if self.symbol_info is None:
+                    self.logger.warning(f"Failed to get symbol info for {self.config.symbol} "
+                                      f"(attempt {attempt}/{max_retries})")
+                    if attempt < max_retries:
+                        time.sleep(2 * attempt)
+                        continue
+                    return False
+                
+                # Enable symbol if not visible
+                if not self.symbol_info.visible:
+                    if not mt5.symbol_select(self.config.symbol, True):
+                        self.logger.warning(f"Failed to select symbol {self.config.symbol} "
+                                          f"(attempt {attempt}/{max_retries})")
+                        if attempt < max_retries:
+                            time.sleep(2 * attempt)
+                            continue
+                        return False
+                
+                self.logger.info(f"Symbol {self.config.symbol} loaded successfully")
+                return True
+                
+            except Exception as e:
+                self.logger.error(f"Connection error (attempt {attempt}/{max_retries}): {e}")
+                if attempt < max_retries:
+                    time.sleep(2 * attempt)
+                    continue
                 return False
-            
-            self.logger.info(f"Logged in to MT5 account: {self.config.mt5_login}")
         
-        # Get account info
-        account_info = mt5.account_info()
-        if account_info is None:
-            self.logger.error("Failed to get account info")
-            return False
-        
-        self.logger.info(f"Account info: Balance={account_info.balance}, "
-                        f"Equity={account_info.equity}, Server={account_info.server}")
-        
-        # Get symbol info
-        self.symbol_info = mt5.symbol_info(self.config.symbol)
-        if self.symbol_info is None:
-            self.logger.error(f"Failed to get symbol info for {self.config.symbol}")
-            return False
-        
-        # Enable symbol if not visible
-        if not self.symbol_info.visible:
-            if not mt5.symbol_select(self.config.symbol, True):
-                self.logger.error(f"Failed to select symbol {self.config.symbol}")
-                return False
-        
-        self.logger.info(f"Symbol {self.config.symbol} loaded successfully")
-        
-        return True
+        return False
     
     def disconnect_mt5(self):
         """Disconnect from MetaTrader 5"""
@@ -271,42 +304,50 @@ class MT5Bot:
             )
             tp = self.risk_manager.calculate_take_profit(price, sl, 'short')
         
-        # Prepare order request
-        request = {
-            'action': mt5.TRADE_ACTION_DEAL,
-            'symbol': self.config.symbol,
-            'volume': volume,
-            'type': order_type,
-            'price': price,
-            'sl': sl,
-            'tp': tp,
-            'deviation': self.config.get('execution.slippage_points', 10),
-            'magic': self.config.magic_number,
-            'comment': f'MT5Bot_{signal}',
-            'type_filling': mt5.ORDER_FILLING_IOC,
-        }
-        
         self.logger.info(f"Opening {signal} position: volume={volume}, "
                         f"price={price}, SL={sl}, TP={tp}")
         
-        # Send order
-        result = mt5.order_send(request)
+        # Try different filling types in order of preference
+        filling_types = [
+            mt5.ORDER_FILLING_IOC,
+            mt5.ORDER_FILLING_FOK,
+            mt5.ORDER_FILLING_RETURN
+        ]
         
-        if result is None:
-            self.logger.error("Order send failed: result is None")
-            self.risk_manager.record_order_error()
-            return False
+        for filling_type in filling_types:
+            request = {
+                'action': mt5.TRADE_ACTION_DEAL,
+                'symbol': self.config.symbol,
+                'volume': volume,
+                'type': order_type,
+                'price': price,
+                'sl': sl,
+                'tp': tp,
+                'deviation': self.config.get('execution.slippage_points', 10),
+                'magic': self.config.magic_number,
+                'comment': f'MT5Bot_{signal}',
+                'type_filling': filling_type,
+            }
+            
+            # Send order
+            result = mt5.order_send(request)
+            
+            if result is None:
+                self.logger.warning(f"Order send failed with filling type {filling_type}")
+                continue
+            
+            if result.retcode == mt5.TRADE_RETCODE_DONE:
+                self.logger.info(f"Order successful: ticket={result.order}, "
+                                f"volume={result.volume}, price={result.price}, filling={filling_type}")
+                self.risk_manager.reset_order_errors()
+                return True
+            
+            self.logger.warning(f"Order failed with {filling_type}: {result.retcode} - {result.comment}")
         
-        if result.retcode != mt5.TRADE_RETCODE_DONE:
-            self.logger.error(f"Order failed: {result.retcode} - {result.comment}")
-            self.risk_manager.record_order_error()
-            return False
-        
-        self.logger.info(f"Order successful: ticket={result.order}, "
-                        f"volume={result.volume}, price={result.price}")
-        self.risk_manager.reset_order_errors()
-        
-        return True
+        # All filling types failed
+        self.logger.error(f"Order failed with all filling types")
+        self.risk_manager.record_order_error()
+        return False
     
     def close_position(self, position: Dict[str, Any]) -> bool:
         """Close an open position
@@ -407,16 +448,32 @@ class MT5Bot:
         Args:
             interval_seconds: Sleep interval between iterations
         """
-        if not self.connect_mt5():
+        if not self.connect_mt5(max_retries=self.config.get('execution.connection_retries', 3)):
             self.logger.error("Failed to connect to MT5")
             return
         
         self.is_running = True
         self.logger.info("Bot started. Press Ctrl+C to stop.")
         
+        iteration_count = 0
+        heartbeat_interval = self.config.get('execution.heartbeat_interval', 10)
+        
         try:
             while self.is_running:
                 try:
+                    iteration_count += 1
+                    
+                    # Heartbeat log
+                    if iteration_count % heartbeat_interval == 0:
+                        account_info = mt5.account_info()
+                        if account_info:
+                            stats = self.risk_manager.get_statistics()
+                            self.logger.info(f"Heartbeat: Equity={account_info.equity:.2f}, "
+                                           f"Balance={account_info.balance:.2f}, "
+                                           f"Trades={stats['total_trades']}, "
+                                           f"Win%={stats['win_rate']:.1f}, "
+                                           f"Net P&L={stats['net_pnl']:.2f}")
+                    
                     self.process_tick()
                 except Exception as e:
                     self.logger.error(f"Error in process_tick: {e}", exc_info=True)
@@ -427,6 +484,24 @@ class MT5Bot:
         except KeyboardInterrupt:
             self.logger.info("Bot stopped by user")
         finally:
+            # Print final statistics
+            stats = self.risk_manager.get_statistics()
+            self.logger.info("=" * 60)
+            self.logger.info("FINAL TRADING STATISTICS")
+            self.logger.info("=" * 60)
+            self.logger.info(f"Total Trades: {stats['total_trades']}")
+            self.logger.info(f"Winning Trades: {stats['winning_trades']}")
+            self.logger.info(f"Losing Trades: {stats['losing_trades']}")
+            self.logger.info(f"Win Rate: {stats['win_rate']:.2f}%")
+            self.logger.info(f"Total Profit: {stats['total_profit']:.2f}")
+            self.logger.info(f"Total Loss: {stats['total_loss']:.2f}")
+            self.logger.info(f"Net P&L: {stats['net_pnl']:.2f}")
+            if stats['total_trades'] > 0:
+                self.logger.info(f"Average Win: {stats['average_win']:.2f}")
+                self.logger.info(f"Average Loss: {stats['average_loss']:.2f}")
+                if stats['profit_factor'] != float('inf'):
+                    self.logger.info(f"Profit Factor: {stats['profit_factor']:.2f}")
+            self.logger.info("=" * 60)
             self.disconnect_mt5()
     
     def stop(self):

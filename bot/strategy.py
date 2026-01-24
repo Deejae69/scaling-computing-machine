@@ -43,6 +43,13 @@ class Strategy:
         current = df.iloc[-1]
         previous = df.iloc[-2]
         
+        # Validate indicator values (check for NaN)
+        required_cols = ['ema_fast', 'ema_slow', 'rsi', 'atr', 'atr_mean']
+        if any(pd.isna(current[col]) for col in required_cols):
+            return False
+        if any(pd.isna(previous[col]) for col in required_cols if col in ['ema_fast', 'ema_slow']):
+            return False
+        
         # Check for bullish EMA crossover
         cross_up = (previous['ema_fast'] <= previous['ema_slow'] and 
                    current['ema_fast'] > current['ema_slow'])
@@ -74,6 +81,13 @@ class Strategy:
         # Get current and previous candles
         current = df.iloc[-1]
         previous = df.iloc[-2]
+        
+        # Validate indicator values (check for NaN)
+        required_cols = ['ema_fast', 'ema_slow', 'rsi', 'atr', 'atr_mean']
+        if any(pd.isna(current[col]) for col in required_cols):
+            return False
+        if any(pd.isna(previous[col]) for col in required_cols if col in ['ema_fast', 'ema_slow']):
+            return False
         
         # Check for bearish EMA crossover
         cross_down = (previous['ema_fast'] >= previous['ema_slow'] and 
