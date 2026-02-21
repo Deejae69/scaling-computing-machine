@@ -18,7 +18,18 @@ from risk_manager import RiskManager
 
 class MT5Bot:
     """MetaTrader 5 Trading Bot"""
-    
+
+    # Map timeframe strings to MT5 constants once at class level
+    _TIMEFRAME_MAP = {
+        'M1': mt5.TIMEFRAME_M1,
+        'M5': mt5.TIMEFRAME_M5,
+        'M15': mt5.TIMEFRAME_M15,
+        'M30': mt5.TIMEFRAME_M30,
+        'H1': mt5.TIMEFRAME_H1,
+        'H4': mt5.TIMEFRAME_H4,
+        'D1': mt5.TIMEFRAME_D1,
+    }
+
     def __init__(self, config_path: str = "config.yaml"):
         """Initialize the trading bot
         
@@ -165,16 +176,7 @@ class MT5Bot:
         Returns:
             MT5 timeframe constant
         """
-        timeframe_map = {
-            'M1': mt5.TIMEFRAME_M1,
-            'M5': mt5.TIMEFRAME_M5,
-            'M15': mt5.TIMEFRAME_M15,
-            'M30': mt5.TIMEFRAME_M30,
-            'H1': mt5.TIMEFRAME_H1,
-            'H4': mt5.TIMEFRAME_H4,
-            'D1': mt5.TIMEFRAME_D1,
-        }
-        return timeframe_map.get(self.config.timeframe_str, mt5.TIMEFRAME_M5)
+        return self._TIMEFRAME_MAP.get(self.config.timeframe_str, mt5.TIMEFRAME_M5)
     
     def fetch_data(self) -> Optional[pd.DataFrame]:
         """Fetch historical data from MT5

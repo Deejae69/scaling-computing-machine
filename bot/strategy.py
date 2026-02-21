@@ -8,6 +8,9 @@ from config import Config
 
 class Strategy:
     """EMA Crossover strategy with RSI and ATR filters"""
+
+    # Columns that must be present and non-NaN before any signal evaluation
+    _REQUIRED_INDICATOR_COLS = ['ema_fast', 'ema_slow', 'rsi', 'atr', 'atr_mean']
     
     def __init__(self, config: Config):
         """Initialize strategy
@@ -26,6 +29,29 @@ class Strategy:
         self.atr_period = config.get('strategy.atr_period', 14)
         self.atr_volatility_threshold = config.get('strategy.atr_volatility_threshold', 0.8)
         
+    def _indicators_valid(self, df: pd.DataFrame) -> bool:
+        """Check that the two most recent rows have valid (non-NaN) indicator values.
+
+        All columns in ``_REQUIRED_INDICATOR_COLS`` are validated for the current
+        (most recent) row.  Only ``ema_fast`` and ``ema_slow`` are validated for the
+        previous row because those are the only values read from it (for crossover
+        detection); the other indicators are only consumed from the current row.
+
+        Returns:
+            True if all required indicators are present and non-NaN, False otherwise
+        """
+        if len(df) < 2:
+            return False
+        current = df.iloc[-1]
+        previous = df.iloc[-2]
+        # Validate all required columns for the current bar
+        if any(pd.isna(current[col]) for col in self._REQUIRED_INDICATOR_COLS):
+            return False
+        # For the previous bar only the EMA values are used (crossover check)
+        if pd.isna(previous['ema_fast']) or pd.isna(previous['ema_slow']):
+            return False
+        return True
+
     def should_open_long(self, df: pd.DataFrame, spread_points: float) -> bool:
         """Check if conditions are met to open a long position
         
@@ -36,19 +62,12 @@ class Strategy:
         Returns:
             True if should open long, False otherwise
         """
-        if len(df) < 2:
+        if not self._indicators_valid(df):
             return False
         
         # Get current and previous candles
         current = df.iloc[-1]
         previous = df.iloc[-2]
-        
-        # Validate indicator values (check for NaN)
-        required_cols = ['ema_fast', 'ema_slow', 'rsi', 'atr', 'atr_mean']
-        if any(pd.isna(current[col]) for col in required_cols):
-            return False
-        if any(pd.isna(previous[col]) for col in required_cols if col in ['ema_fast', 'ema_slow']):
-            return False
         
         # Check for bullish EMA crossover
         cross_up = (previous['ema_fast'] <= previous['ema_slow'] and 
@@ -75,19 +94,12 @@ class Strategy:
         Returns:
             True if should open short, False otherwise
         """
-        if len(df) < 2:
+        if not self._indicators_valid(df):
             return False
         
         # Get current and previous candles
         current = df.iloc[-1]
         previous = df.iloc[-2]
-        
-        # Validate indicator values (check for NaN)
-        required_cols = ['ema_fast', 'ema_slow', 'rsi', 'atr', 'atr_mean']
-        if any(pd.isna(current[col]) for col in required_cols):
-            return False
-        if any(pd.isna(previous[col]) for col in required_cols if col in ['ema_fast', 'ema_slow']):
-            return False
         
         # Check for bearish EMA crossover
         cross_down = (previous['ema_fast'] >= previous['ema_slow'] and 
