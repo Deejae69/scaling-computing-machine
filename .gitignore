@@ -32,4 +32,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# package manager lock files (project uses yarn)
+package-lock.json
+
 .env
