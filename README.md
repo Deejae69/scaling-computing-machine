@@ -11,6 +11,32 @@ An Onchain App Template built with [OnchainKit](https://onchainkit.xyz), ready f
 
 Demo: https://onchain-app-template.vercel.app
 
+---
+
+## 🤖 MetaTrader 5 Trading Bot
+
+This repository also includes a Python trading bot for MetaTrader 5 implementing an automated EMA crossover strategy.
+
+**📁 Location**: `/bot` directory
+
+**Quick Start**:
+```bash
+cd bot
+pip install -r requirements.txt
+# Configure bot/.env with MT5 credentials
+python run_demo.py
+```
+
+**Features**:
+- EMA(20/50) crossover with RSI(14) and ATR(14) filters
+- Risk management: 1% risk per trade, ATR-based stops
+- Daily loss cap and consecutive loss protection
+- Paper/demo and live trading modes
+
+**📖 Documentation**: See [bot/README.md](bot/README.md) for full setup and usage instructions.
+
+---
+
 ## Quick Start
 
 ### Deploy to Vercel
