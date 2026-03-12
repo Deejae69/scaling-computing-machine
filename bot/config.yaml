@@ -13,7 +13,7 @@ risk:
   max_consecutive_losses: 3  # Kill switch after N consecutive losses
   atr_stop_multiplier: 1.8  # Stop loss = ATR * multiplier
   risk_reward_ratio: 1.7  # Take profit = stop loss * ratio
-  enable_trailing_stop: true  # Enable trailing stop after 1R profit
+  enable_trailing_stop: false  # Trailing stop (not yet implemented) - set to true once supported
 
 # Strategy - EMA Crossover with RSI and ATR Filter
 strategy:
