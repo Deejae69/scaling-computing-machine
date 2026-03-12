@@ -61,11 +61,15 @@ class RiskManager:
             self.losing_trades += 1
             self.total_loss += abs(pnl)
             self.logger.warning(f"Loss recorded: {pnl}. Consecutive losses: {self.consecutive_losses}")
-        else:
+        elif pnl > 0:
             self.consecutive_losses = 0
             self.winning_trades += 1
             self.total_profit += pnl
             self.logger.info(f"Profit recorded: {pnl}. Consecutive losses reset.")
+        else:
+            # Break-even trade: reset consecutive losses but don't count as win or loss
+            self.consecutive_losses = 0
+            self.logger.info(f"Break-even trade recorded (PnL: {pnl}). Consecutive losses reset.")
         
         # Log statistics
         if self.total_trades > 0:
