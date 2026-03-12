@@ -19,9 +19,16 @@ class Config:
         # Load environment variables
         load_dotenv()
         
-        # Load YAML config
-        with open(config_path, 'r') as f:
-            self.config = yaml.safe_load(f)
+        # Load YAML config with error handling
+        try:
+            with open(config_path, 'r') as f:
+                self.config = yaml.safe_load(f) or {}
+        except FileNotFoundError as e:
+            raise FileNotFoundError(f"Configuration file '{config_path}' not found.") from e
+        except OSError as e:
+            raise OSError(f"Could not open configuration file '{config_path}': {e}") from e
+        except yaml.YAMLError as e:
+            raise ValueError(f"Failed to parse YAML configuration file '{config_path}': {e}") from e
         
         # MT5 Credentials from environment
         try:
