@@ -400,8 +400,13 @@ class MT5Bot:
             self.risk_manager.record_order_error()
             return False
         
-        self.logger.info(f"Position closed successfully: profit={position['profit']}")
-        self.risk_manager.record_trade_result(position['profit'])
+        # Prefer realized profit from the close result if available, fall back to pre-close value
+        realized_profit = getattr(result, "profit", None)
+        if realized_profit is None:
+            realized_profit = position.get("profit", 0.0)
+        
+        self.logger.info(f"Position closed successfully: profit={realized_profit}")
+        self.risk_manager.record_trade_result(realized_profit)
         self.risk_manager.reset_order_errors()
         
         return True
