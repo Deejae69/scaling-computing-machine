@@ -4,6 +4,7 @@ A Python trading bot for MetaTrader 5 implementing an EMA crossover strategy wit
 
 ## Features
 
+### Core Strategy
 - **Strategy**: EMA(20/50) crossover with RSI(14) filter and ATR(14) volatility check
 - **Risk Management**: 
   - 1% equity risk per trade
@@ -16,11 +17,21 @@ A Python trading bot for MetaTrader 5 implementing an EMA crossover strategy wit
 - **Spread filtering**: Skips trades if spread exceeds threshold
 - **Automated position sizing**: Based on ATR and account equity
 
+### New Features ✨
+- **🎯 Trailing Stops**: Automatically locks in profits as trade moves favorably
+- **📊 Trade Journal**: Records all trades with CSV/JSON export for analysis
+- **📱 Telegram Notifications**: Real-time alerts for trades, errors, and daily summaries
+- **⚙️ Advanced Position Management**: Modify stop loss and take profit on open positions
+- **📈 Enhanced Statistics**: Comprehensive performance tracking and reporting
+
+See [NEW_FEATURES.md](NEW_FEATURES.md) for detailed documentation on new features.
+
 ## Requirements
 
 - Python 3.11+
 - MetaTrader 5 terminal installed
 - MT5 account (demo or live)
+- (Optional) Telegram account for notifications
 
 ## Installation
 

@@ -51,3 +51,6 @@ env/
 # Bot logs
 bot/*.log
 bot/.env
+
+# Trade journal exports
+bot/trades/

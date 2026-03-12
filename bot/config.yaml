@@ -32,6 +32,19 @@ execution:
   magic_number: 12345  # Unique identifier for bot orders
   connection_retries: 3  # Number of connection retry attempts
   heartbeat_interval: 10  # Log heartbeat every N iterations
+  trailing_stop_distance: 50  # Trailing stop distance in points (when enabled)
+  
+# Notifications
+notifications:
+  telegram_enabled: false  # Enable Telegram notifications
+  telegram_bot_token: ""  # Telegram bot token (from BotFather)
+  telegram_chat_id: ""  # Your Telegram chat ID
+  
+# Trade Journal
+journal:
+  enabled: true  # Enable trade journal
+  export_on_shutdown: true  # Export to CSV on bot shutdown
+  output_directory: "trades"  # Directory for trade records
   
 # Data Collection
 data:

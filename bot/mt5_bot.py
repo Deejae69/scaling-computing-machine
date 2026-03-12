@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 import time
 import logging
+import os
 from datetime import datetime
 from typing import Optional, Dict, Any
 
@@ -14,6 +15,9 @@ from config import Config
 from indicators import Indicators
 from strategy import Strategy
 from risk_manager import RiskManager
+from position_manager import PositionManager
+from trade_journal import TradeJournal
+from telegram_notifier import TelegramNotifier
 
 
 class MT5Bot:
@@ -35,6 +39,26 @@ class MT5Bot:
         self.indicators = Indicators()
         self.strategy = Strategy(self.config)
         self.risk_manager = RiskManager(self.config)
+        
+        # Initialize position manager (will be set after connection)
+        self.position_manager: Optional[PositionManager] = None
+        
+        # Initialize trade journal
+        if self.config.get('journal.enabled', True):
+            journal_dir = self.config.get('journal.output_directory', 'trades')
+            self.journal = TradeJournal(output_dir=journal_dir)
+            self.logger.info(f"Trade journal enabled, output directory: {journal_dir}")
+        else:
+            self.journal = None
+        
+        # Initialize Telegram notifier
+        telegram_enabled = self.config.get('notifications.telegram_enabled', False)
+        if telegram_enabled:
+            bot_token = os.getenv('TELEGRAM_BOT_TOKEN') or self.config.get('notifications.telegram_bot_token')
+            chat_id = os.getenv('TELEGRAM_CHAT_ID') or self.config.get('notifications.telegram_chat_id')
+            self.notifier = TelegramNotifier(bot_token=bot_token, chat_id=chat_id)
+        else:
+            self.notifier = TelegramNotifier()  # Disabled notifier
         
         # State tracking
         self.is_running = False
@@ -143,6 +167,15 @@ class MT5Bot:
                         return False
                 
                 self.logger.info(f"Symbol {self.config.symbol} loaded successfully")
+                
+                # Initialize position manager
+                self.position_manager = PositionManager(
+                    symbol=self.config.symbol,
+                    point=self.symbol_info.point,
+                    magic_number=self.config.magic_number
+                )
+                self.logger.info("Position manager initialized")
+                
                 return True
                 
             except Exception as e:
@@ -340,6 +373,34 @@ class MT5Bot:
                 self.logger.info(f"Order successful: ticket={result.order}, "
                                 f"volume={result.volume}, price={result.price}, filling={filling_type}")
                 self.risk_manager.reset_order_errors()
+                
+                # Record in trade journal
+                if self.journal:
+                    self.journal.start_trade(
+                        ticket=result.order,
+                        symbol=self.config.symbol,
+                        trade_type=signal,
+                        volume=result.volume,
+                        entry_price=result.price,
+                        stop_loss=sl,
+                        take_profit=tp
+                    )
+                
+                # Send notification
+                self.notifier.notify_trade_open(
+                    symbol=self.config.symbol,
+                    trade_type=signal,
+                    volume=result.volume,
+                    price=result.price,
+                    sl=sl,
+                    tp=tp
+                )
+                
+                # Activate trailing stop if enabled
+                if self.config.enable_trailing_stop and self.position_manager:
+                    trailing_distance = self.config.get('execution.trailing_stop_distance', 50)
+                    self.position_manager.activate_trailing_stop(result.order, trailing_distance)
+                
                 return True
             
             self.logger.warning(f"Order failed with {filling_type}: {result.retcode} - {result.comment}")
@@ -402,6 +463,26 @@ class MT5Bot:
         self.risk_manager.record_trade_result(position['profit'])
         self.risk_manager.reset_order_errors()
         
+        # Record in trade journal
+        if self.journal:
+            self.journal.end_trade(
+                exit_price=price,
+                pnl=position['profit'],
+                exit_reason='strategy_exit'
+            )
+        
+        # Send notification
+        self.notifier.notify_trade_close(
+            symbol=self.config.symbol,
+            trade_type=position['type'],
+            pnl=position['profit'],
+            reason='strategy_exit'
+        )
+        
+        # Clean up position manager tracking
+        if self.position_manager:
+            self.position_manager.cleanup_closed_position(position['ticket'])
+        
         return True
     
     def process_tick(self):
@@ -421,6 +502,7 @@ class MT5Bot:
         can_trade, reason = self.risk_manager.can_trade(account_info.equity)
         if not can_trade:
             self.logger.warning(f"Trading disabled: {reason}")
+            self.notifier.notify_kill_switch(reason)
             return
         
         # Get current spread
@@ -430,6 +512,18 @@ class MT5Bot:
         position = self.get_current_position()
         
         if position is not None:
+            # Update trailing stop if enabled
+            if self.config.enable_trailing_stop and self.position_manager:
+                tick = mt5.symbol_info_tick(self.config.symbol)
+                if tick:
+                    current_price = tick.bid if position['type'] == 'long' else tick.ask
+                    self.position_manager.update_trailing_stop(
+                        ticket=position['ticket'],
+                        current_price=current_price,
+                        position_type=position['type'],
+                        current_sl=position['sl']
+                    )
+            
             # We have an open position, check if we should close it
             if self.strategy.should_close_position(df, position['type']):
                 self.logger.info(f"Strategy signal to close {position['type']} position")
@@ -502,6 +596,31 @@ class MT5Bot:
                 if stats['profit_factor'] != float('inf'):
                     self.logger.info(f"Profit Factor: {stats['profit_factor']:.2f}")
             self.logger.info("=" * 60)
+            
+            # Export trade journal if enabled
+            if self.journal and self.config.get('journal.export_on_shutdown', True):
+                try:
+                    csv_path = self.journal.export_csv()
+                    json_path = self.journal.export_json()
+                    self.logger.info(f"Trade journal exported to:")
+                    self.logger.info(f"  CSV: {csv_path}")
+                    self.logger.info(f"  JSON: {json_path}")
+                    
+                    journal_stats = self.journal.get_summary()
+                    self.logger.info(f"Journal Summary: {journal_stats['total_trades']} trades recorded")
+                except Exception as e:
+                    self.logger.error(f"Failed to export trade journal: {e}")
+            
+            # Send final notification
+            if stats['total_trades'] > 0:
+                self.notifier.notify_daily_summary(
+                    trades=stats['total_trades'],
+                    wins=stats['winning_trades'],
+                    losses=stats['losing_trades'],
+                    pnl=stats['net_pnl'],
+                    win_rate=stats['win_rate']
+                )
+            
             self.disconnect_mt5()
     
     def stop(self):
