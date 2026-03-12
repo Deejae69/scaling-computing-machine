@@ -28,7 +28,7 @@ strategy:
 # Execution
 execution:
   slippage_points: 10  # Maximum acceptable slippage
-  order_type: "MARKET"  # MARKET or LIMIT
+  order_type: "MARKET"  # Order type placeholder; currently unused (bot sends only MARKET orders). TODO: implement LIMIT order support.
   magic_number: 12345  # Unique identifier for bot orders
   connection_retries: 3  # Number of connection retry attempts
   heartbeat_interval: 10  # Log heartbeat every N iterations
