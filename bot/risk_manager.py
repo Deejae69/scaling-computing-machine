@@ -151,8 +151,14 @@ class RiskManager:
         # Apply volume constraints
         volume = max(volume_min, min(volume, volume_max))
         
-        # Round to volume step
-        volume = round(volume / volume_step) * volume_step
+        # Round to volume step if valid to avoid division by zero
+        if volume_step <= 0:
+            self.logger.warning(
+                "Invalid volume_step (%s); skipping volume rounding and using constrained volume",
+                volume_step,
+            )
+        else:
+            volume = round(volume / volume_step) * volume_step
         
         self.logger.info(f"Position size calculated: {volume} lots "
                         f"(risk: {risk_amount}, SL points: {sl_points})")
