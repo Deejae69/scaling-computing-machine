@@ -3,7 +3,7 @@
 # Trading Parameters
 trading:
   symbol: "EURUSD"
-  timeframe: "M5"  # M5 or M15
+  timeframe: "M5"  # Supported: M1, M5, M15, M30, H1, H4, D1
   max_spread_points: 15  # Maximum allowed spread in points
   
 # Risk Management
