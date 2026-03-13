@@ -10,6 +10,7 @@ import type {
   TransactionError,
   TransactionResponse,
 } from '@coinbase/onchainkit/transaction';
+import { useCallback, useMemo } from 'react';
 import type { Address, ContractFunctionParameters } from 'viem';
 import {
   BASE_SEPOLIA_CHAIN_ID,
@@ -18,22 +19,26 @@ import {
 } from '../constants';
 
 export default function TransactionWrapper({ address }: { address: Address }) {
-  const contracts = [
-    {
-      address: mintContractAddress,
-      abi: mintABI,
-      functionName: 'mint',
-      args: [address],
-    },
-  ] as unknown as ContractFunctionParameters[];
+  const contracts = useMemo(
+    () =>
+      [
+        {
+          address: mintContractAddress,
+          abi: mintABI,
+          functionName: 'mint',
+          args: [address],
+        },
+      ] as unknown as ContractFunctionParameters[],
+    [address],
+  );
 
-  const handleError = (err: TransactionError) => {
+  const handleError = useCallback((err: TransactionError) => {
     console.error('Transaction error:', err);
-  };
+  }, []);
 
-  const handleSuccess = (response: TransactionResponse) => {
+  const handleSuccess = useCallback((response: TransactionResponse) => {
     console.log('Transaction successful', response);
-  };
+  }, []);
 
   return (
     <div className="flex w-[450px]">
